@@ -79,6 +79,7 @@ export const TodoItem: React.FC<Props> = ({
       id: todo.id,
       title: todoBody,
       userId: todo.userId,
+
       completed: !todo.completed,
     })
       .then(() => {
