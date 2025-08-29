@@ -1,29 +1,43 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { UserWarning } from './UserWarning';
 import * as todoService from './api/todos';
+
+import { Header } from './components/Header';
+import { TodoList } from './components/TodoList';
+import { Footer } from './components/Footer';
+import { ErrorNotification } from './components/ErrorNotification';
+
 import { Todo } from './types/Todo';
 import { SORTFIELD } from './types/SortField';
-import { Header } from './components/Header';
-import { Footer } from './components/Footer';
-import { TodoList } from './components/TodoList';
-import { ErrorNotification } from './components/ErrorNotification';
-import { getVisibleTodos } from './helpers/helper';
-import { Processing } from './types/Processing';
 import { ErrorTypes } from './types/ErrorType';
+import { Processing } from './types/Processing';
 
 export const App: React.FC = () => {
-  const [sortField, setSortField] = useState<SORTFIELD>(SORTFIELD.ALL);
   const [todos, setTodos] = useState<Todo[]>([]);
-  const [errorMessage, setErrorMessage] = useState('');
   const [tempTodo, setTempTodo] = useState<Todo | null>(null);
-  const [title, setTitle] = useState('');
-  const [editingMode, setEditingMode] = useState<number | null>(null);
 
   const [isProcessing, setIsProcessing] = useState<Processing>({
-    editing: [],
-    submitting: null,
-    deleting: [],
+    deleting: null,
+    submitting: [],
   });
+
+  const [title, setTitle] = useState('');
+  const [isActive, setIsActive] = useState(false);
+
+  const [sortField, setSortField] = useState<SORTFIELD>(SORTFIELD.ALL);
+  const [errorMessage, setErrorMessage] = useState<ErrorTypes | null>(null);
+
+  const titleField = useRef<HTMLInputElement | null>(null);
+
+  const errorMessageHandle = (newError: ErrorTypes | null) => {
+    setErrorMessage(newError);
+  };
+
+  useEffect(() => {
+    if (titleField) {
+      titleField.current?.focus();
+    }
+  }, [titleField]);
 
   useEffect(() => {
     todoService
@@ -31,91 +45,194 @@ export const App: React.FC = () => {
       .then(setTodos)
       .catch(() => {
         setErrorMessage(ErrorTypes.getError);
-        setTimeout(() => {
-          setErrorMessage('');
-        }, 3000);
       });
   }, []);
+
+  useEffect(() => {
+    if (errorMessage) {
+      const timer = setTimeout(() => {
+        setErrorMessage(null);
+      }, 3000);
+
+      return () => clearTimeout(timer);
+    }
+
+    return undefined;
+  }, [errorMessage]);
+
+  useEffect(() => {
+    const doneTodos = todos.filter(todo => todo.completed);
+
+    if (todos.length === doneTodos.length) {
+      setIsActive(true);
+    } else {
+      setIsActive(false);
+    }
+  }, [todos]);
 
   if (!todoService.USER_ID) {
     return <UserWarning />;
   }
 
-  const deleteTodo = (todoId: number) => {
-    setErrorMessage('');
-
-    return todoService
-      .deleteTodo(todoId)
-      .then(() => {
-        setErrorMessage('');
-        setTodos(currentTodos =>
-          currentTodos.filter(currentTodo => currentTodo.id !== todoId),
-        );
-      })
-      .catch(error => {
-        setTodos(todos);
-        setErrorMessage(ErrorTypes.deleteError);
-        setTimeout(() => {
-          setErrorMessage('');
-        }, 3000);
-
-        throw error;
-      });
-  };
-
-  const createTodo = (todo: Todo) => {
-    setErrorMessage('');
-
-    const temporaryTodo: Todo = {
+  const createTodoHandle = (newTodo: Todo) => {
+    const newTempTodo: Todo = {
       id: 0,
-      userId: todoService.USER_ID,
-      title,
+      title: newTodo.title,
       completed: false,
+      userId: todoService.USER_ID,
     };
 
-    setTempTodo(temporaryTodo);
+    setTempTodo(newTempTodo);
 
-    return todoService
-      .createTodo(todo)
-      .then(newTodo => {
-        setErrorMessage('');
-        setTodos(currentTodos => [...currentTodos, newTodo]);
+    todoService
+      .createTodo(newTodo)
+      .then(addedTodo => {
+        setTodos(prevTodos => [...prevTodos, addedTodo]);
+        setTempTodo(null);
+        setErrorMessage(null);
+        setTitle('');
+      })
+      .catch(() => {
+        setErrorMessage(ErrorTypes.postError);
         setTempTodo(null);
       })
-      .catch(error => {
-        setTempTodo(null);
-        setErrorMessage(ErrorTypes.postError);
-        setTimeout(() => {
-          setErrorMessage('');
-        }, 3000);
-
-        throw error;
+      .finally(() => {
+        titleField.current?.focus();
       });
   };
 
-  const updateTodo = (todo: Todo) => {
-    setErrorMessage('');
+  const deleteTodoHandle = (todoId: number) => {
+    setIsProcessing(prev => ({ ...prev, deleting: todoId }));
+
+    todoService
+      .deleteTodo(todoId)
+      .then(() => {
+        setTodos(prevTodos => prevTodos.filter(todo => todo.id !== todoId));
+      })
+      .catch(() => {
+        setErrorMessage(ErrorTypes.deleteError);
+      })
+      .finally(() => {
+        setIsProcessing(prev => ({ ...prev, deleting: null }));
+        titleField.current?.focus();
+      });
+  };
+
+  const deleteAllCompleted = () => {
+    const completedTodos = todos.filter(todo => todo.completed);
+
+    completedTodos.map(todo => deleteTodoHandle(todo.id));
+  };
+
+  const renameTodoHandle = (updatingTodo: Todo) => {
+    const updatedTodo = {
+      id: updatingTodo.id,
+      title: updatingTodo.title,
+      completed: updatingTodo.completed,
+      userId: todoService.USER_ID,
+    };
+
+    setIsProcessing(prev => ({
+      ...prev,
+      submitting: [...prev.submitting, updatingTodo.id],
+    }));
 
     return todoService
-      .updateTodo(todo)
-      .then(updatedTodo => {
-        setErrorMessage('');
-        setTodos(currentTodos => {
-          const updatedTodos = [...currentTodos];
-          const index = updatedTodos.findIndex(t => t.id === todo.id);
+      .updateTodo(updatedTodo)
+      .then(() => {
+        setTodos(prevTodos =>
+          prevTodos.map(todo =>
+            todo.id === updatingTodo.id
+              ? { ...todo, title: updatingTodo.title }
+              : todo,
+          ),
+        );
 
-          updatedTodos.splice(index, 1, updatedTodo);
-
-          return updatedTodos;
-        });
+        return false;
       })
-      .catch(err => {
+      .catch(() => {
         setErrorMessage(ErrorTypes.patchError);
-        setTimeout(() => {
-          setErrorMessage('');
-        }, 3000);
-        throw err;
+
+        return true;
+      })
+      .finally(() => {
+        setIsProcessing(prev => ({
+          ...prev,
+          submitting: [...prev.submitting.filter(i => i !== updatingTodo.id)],
+        }));
       });
+  };
+
+  const singleToggleHandle = (
+    id: number,
+    todoTitle: string,
+    completed: boolean,
+  ) => {
+    const updatedTodo = {
+      id,
+      title: todoTitle,
+      completed: !completed,
+      userId: todoService.USER_ID,
+    };
+
+    setIsProcessing(prev => ({
+      ...prev,
+      submitting: [...prev.submitting, id],
+    }));
+
+    todoService
+      .updateTodo(updatedTodo)
+      .then(() => {
+        setTodos(prevTodos =>
+          prevTodos.map(todo =>
+            todo.id === id ? { ...todo, completed: !completed } : todo,
+          ),
+        );
+      })
+      .catch(() => {
+        setErrorMessage(ErrorTypes.patchError);
+      })
+      .finally(() => {
+        setIsProcessing(prev => ({
+          ...prev,
+          submitting: [...prev.submitting.filter(i => i !== id)],
+        }));
+      });
+  };
+
+  const multiToggleHandle = () => {
+    const notComplided = todos.filter(todo => todo.completed === false);
+    const complidedTodos = todos.filter(todo => todo.completed === true);
+
+    if (notComplided.length === todos.length) {
+      notComplided.map(todo =>
+        singleToggleHandle(todo.id, todo.title, todo.completed),
+      );
+    }
+
+    if (complidedTodos.length === todos.length) {
+      complidedTodos.map(todo =>
+        singleToggleHandle(todo.id, todo.title, todo.completed),
+      );
+    }
+
+    if (notComplided.length > 0) {
+      notComplided.map(todo =>
+        singleToggleHandle(todo.id, todo.title, todo.completed),
+      );
+    }
+  };
+
+  const visibleTodos = (items: Todo[], sortType: SORTFIELD) => {
+    let visibleItems = [...items];
+
+    if (sortType === SORTFIELD.ACTIVE) {
+      visibleItems = visibleItems.filter(t => !t.completed);
+    } else if (sortType === SORTFIELD.COMPLETED) {
+      visibleItems = visibleItems.filter(t => t.completed);
+    }
+
+    return visibleItems;
   };
 
   return (
@@ -125,57 +242,36 @@ export const App: React.FC = () => {
       <div className="todoapp__content">
         <Header
           todos={todos}
-          onSubmit={createTodo}
-          errorMessage={errorMessage}
-          setErrorMessage={setErrorMessage}
+          tempTodo={tempTodo}
           title={title}
           setTitle={setTitle}
-          isProcessing={isProcessing}
-          setIsProcessing={setIsProcessing}
-          editingMode={editingMode}
-          onUpdate={updateTodo}
+          createTodoHandle={createTodoHandle}
+          errorMessageHandle={errorMessageHandle}
+          multiToggleHandle={multiToggleHandle}
+          isActive={isActive}
+          titleField={titleField}
         />
 
         <TodoList
-          todos={getVisibleTodos(todos, sortField)}
-          onDelete={deleteTodo}
+          todos={visibleTodos(todos, sortField)}
+          tempTodo={tempTodo}
+          deleteTodoHandle={deleteTodoHandle}
           isProcessing={isProcessing}
-          setIsProcessing={setIsProcessing}
-          onUpdate={updateTodo}
-          editingMode={editingMode}
-          setEditingMode={setEditingMode}
+          singleToggleHandle={singleToggleHandle}
+          renameTodoHandle={renameTodoHandle}
         />
 
-        {tempTodo && (
-          <TodoList
-            todos={[tempTodo]}
-            onDelete={() => Promise.resolve()}
-            isProcessing={isProcessing}
-            setIsProcessing={setIsProcessing}
-            onUpdate={updateTodo}
-            editingMode={editingMode}
-            setEditingMode={setEditingMode}
-          />
-        )}
-
-        {/* Hide the footer if there are no todos */}
         {todos.length > 0 && (
           <Footer
-            todos={todos}
             sortField={sortField}
             setSortField={setSortField}
-            onDelete={deleteTodo}
-            setIsProcessing={setIsProcessing}
+            todos={todos}
+            deleteAllCompleted={deleteAllCompleted}
           />
         )}
       </div>
 
-      {/* DON'T use conditional rendering to hide the notification */}
-      {/* Add the 'hidden' class to hide the message smoothly */}
-      <ErrorNotification
-        errorMessage={errorMessage}
-        setErrorMessage={setErrorMessage}
-      />
+      <ErrorNotification errorMessage={errorMessage} />
     </div>
   );
 };

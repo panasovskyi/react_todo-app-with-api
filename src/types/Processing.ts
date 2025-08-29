@@ -1,5 +1,4 @@
 export type Processing = {
-  editing: number[];
-  submitting: number | null;
-  deleting: number[];
+  submitting: number[];
+  deleting: number | null;
 };

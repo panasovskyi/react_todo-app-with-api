@@ -1,174 +1,133 @@
 /* eslint-disable jsx-a11y/label-has-associated-control */
 /* eslint-disable jsx-a11y/control-has-associated-label */
 
-import cn from 'classnames';
+import React, { useState } from 'react';
 import { Todo } from '../types/Todo';
+import cn from 'classnames';
 import { Processing } from '../types/Processing';
-import { useEffect, useRef, useState } from 'react';
+import { USER_ID } from '../api/todos';
 
 type Props = {
   todo: Todo;
-  onDelete: (value: number) => Promise<void>;
+
+  deleteTodoHandle: (todoId: number) => void;
+  singleToggleHandle: (id: number, title: string, completed: boolean) => void;
+  renameTodoHandle: (value: Todo) => Promise<boolean>;
+
   isProcessing: Processing;
-  setIsProcessing: React.Dispatch<React.SetStateAction<Processing>>;
-  onUpdate: (value: Todo) => Promise<void>;
-  editingMode: number | null;
-  setEditingMode: (value: number | null) => void;
 };
 
 export const TodoItem: React.FC<Props> = ({
-  todo,
-  onDelete,
+  todo: { title, completed, id },
+  deleteTodoHandle,
+  singleToggleHandle,
+  renameTodoHandle,
   isProcessing,
-  setIsProcessing,
-  onUpdate,
-  editingMode,
-  setEditingMode,
 }) => {
-  const [todoBody, setTodoBody] = useState(todo.title);
+  const [showEditingForm, setShowEditingForm] = useState(false);
+  const [updatedTitle, setUpdatedTitle] = useState(title);
 
-  const onDeleteHandle = (todoId: number) => {
-    setIsProcessing(prev => ({ ...prev, deleting: [todo.id] }));
-    onDelete(todoId).finally(() =>
-      setIsProcessing(prev => ({ ...prev, deleting: [] })),
-    );
-  };
+  const handleSubmit = () => {
+    setUpdatedTitle(prev => prev.trim());
 
-  const onRenameHandle = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-
-    setEditingMode(null);
-
-    setIsProcessing(prev => ({ ...prev, editing: [todo.id] }));
-
-    if (todoBody === todo.title) {
-      setIsProcessing(prev => ({ ...prev, editing: [] }));
-      setEditingMode(null);
+    if (updatedTitle === title) {
+      setShowEditingForm(false);
 
       return;
     }
 
-    if (todoBody.length === 0) {
-      onDelete(todo.id).catch(() => {
-        setEditingMode(todo.id);
-        setIsProcessing(prev => ({ ...prev, editing: [] }));
-      });
+    if (!updatedTitle.length) {
+      deleteTodoHandle(id);
 
       return;
     }
 
-    onUpdate({
-      id: todo.id,
-      title: todoBody.trim(),
-      userId: todo.userId,
-      completed: todo.completed,
-    })
-      .then(() => setEditingMode(null))
-      .catch(() => {
-        setEditingMode(todo.id);
-      })
-      .finally(() => {
-        setIsProcessing(prev => ({ ...prev, editing: [] }));
-      });
+    renameTodoHandle({
+      id,
+      title: updatedTitle,
+      completed,
+      userId: USER_ID,
+    }).then(response => setShowEditingForm(response));
   };
 
-  const onToggleHandle = () => {
-    setIsProcessing(prev => ({ ...prev, editing: [todo.id] }));
-
-    onUpdate({
-      id: todo.id,
-      title: todoBody,
-      userId: todo.userId,
-
-      completed: !todo.completed,
-    })
-      .then(() => {
-        setIsProcessing(prev => ({ ...prev, editing: [] }));
-      })
-      .finally(() => {
-        setIsProcessing(prev => ({ ...prev, editing: [] }));
-      });
+  const reset = () => {
+    setUpdatedTitle(title);
+    setShowEditingForm(false);
   };
 
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (inputRef.current && editingMode === todo.id) {
-      inputRef.current.focus();
+  const handleKeyUp = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      reset();
     }
-  }, [editingMode, todo.id]);
 
-  const onKeyUpHandle = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === 'Escape') {
-      setTodoBody(todo.title);
-      setEditingMode(null);
+    if (e.key === 'Enter') {
+      handleSubmit();
     }
   };
 
   return (
-    <div
-      key={todo.id}
-      data-cy="Todo"
-      className={cn('todo', { completed: todo.completed })}
-    >
-      <label className="todo__status-label">
-        <input
-          data-cy="TodoStatus"
-          type="checkbox"
-          className="todo__status"
-          checked={todo.completed}
-          onChange={onToggleHandle}
-        />
-      </label>
-
-      {editingMode === todo.id ? (
-        <form onSubmit={onRenameHandle} onBlur={onRenameHandle}>
+    <>
+      <div data-cy="Todo" className={cn('todo', { completed })}>
+        <label className="todo__status-label">
           <input
-            ref={inputRef}
+            data-cy="TodoStatus"
+            type="checkbox"
+            className="todo__status loader"
+            checked={completed}
+            onChange={() => singleToggleHandle(id, title, completed)}
+          />
+        </label>
+
+        {showEditingForm ? (
+          <input
             data-cy="TodoTitleField"
             type="text"
+            value={updatedTitle}
+            placeholder={
+              updatedTitle.length === 0
+                ? 'Empty todo will be deleted'
+                : updatedTitle
+            }
+            onChange={e => setUpdatedTitle(e.target.value)}
             className="todo__title-field"
-            placeholder="Empty todo will be deleted"
-            value={todoBody}
-            onChange={e => setTodoBody(e.target.value)}
-            onKeyUp={onKeyUpHandle}
+            onBlur={handleSubmit}
+            onKeyUp={handleKeyUp}
+            autoFocus
           />
-        </form>
-      ) : (
-        <>
+        ) : (
           <span
             data-cy="TodoTitle"
             className="todo__title"
-            onDoubleClick={() => setEditingMode(todo.id)}
+            onDoubleClick={() => setShowEditingForm(true)}
           >
-            {todo.title}
+            {updatedTitle}
           </span>
+        )}
 
+        {!showEditingForm && (
           <button
             type="button"
             className="todo__remove"
             data-cy="TodoDelete"
-            onClick={() => {
-              onDeleteHandle(todo.id);
-            }}
+            onClick={() => deleteTodoHandle(id)}
           >
             ×
           </button>
-        </>
-      )}
+        )}
 
-      <div
-        data-cy="TodoLoader"
-        className={cn('modal overlay', {
-          'is-active':
-            isProcessing.deleting.includes(todo.id) ||
-            isProcessing.submitting === todo.id ||
-            isProcessing.editing.includes(todo.id),
-        })}
-      >
-        <div className="modal-background has-background-white-ter" />
-        <div className="loader" />
+        <div
+          data-cy="TodoLoader"
+          className={cn('modal overlay', {
+            'is-active':
+              id === 0 ||
+              id === isProcessing.deleting ||
+              isProcessing.submitting.includes(id),
+          })}
+        >
+          <div className="modal-background has-background-white-ter" />
+          <div className="loader" />
+        </div>
       </div>
-    </div>
+    </>
   );
 };

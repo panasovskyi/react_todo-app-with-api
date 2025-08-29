@@ -1,48 +1,49 @@
-import { CSSTransition, TransitionGroup } from 'react-transition-group';
-import { Processing } from '../types/Processing';
+import React from 'react';
 import { Todo } from '../types/Todo';
 import { TodoItem } from './TodoItem';
+import { Processing } from '../types/Processing';
 
 type Props = {
   todos: Todo[];
-  onDelete: (value: number) => Promise<void>;
+  tempTodo: Todo | null;
+
   isProcessing: Processing;
-  setIsProcessing: React.Dispatch<React.SetStateAction<Processing>>;
-  onUpdate: (value: Todo) => Promise<void>;
-  editingMode: number | null;
-  setEditingMode: (value: number | null) => void;
+
+  deleteTodoHandle: (todoId: number) => void;
+  singleToggleHandle: (id: number, title: string, completed: boolean) => void;
+  renameTodoHandle: (value: Todo) => Promise<boolean>;
 };
 
 export const TodoList: React.FC<Props> = ({
   todos,
-  onDelete,
+  tempTodo,
+  deleteTodoHandle,
+  singleToggleHandle,
+  renameTodoHandle,
   isProcessing,
-  setIsProcessing,
-  onUpdate,
-  editingMode,
-  setEditingMode,
 }) => {
   return (
     <section className="todoapp__main" data-cy="TodoList">
-      <TransitionGroup>
-        {todos.map(todo => (
-          <CSSTransition
-            key={todo.id}
-            timeout={300}
-            classNames={todo.id === 0 ? 'temp-item' : 'item'}
-          >
-            <TodoItem
-              todo={todo}
-              onDelete={onDelete}
-              isProcessing={isProcessing}
-              setIsProcessing={setIsProcessing}
-              onUpdate={onUpdate}
-              editingMode={editingMode}
-              setEditingMode={setEditingMode}
-            />
-          </CSSTransition>
-        ))}
-      </TransitionGroup>
+      {todos.map(todo => (
+        <TodoItem
+          key={todo.id}
+          todo={todo}
+          deleteTodoHandle={deleteTodoHandle}
+          singleToggleHandle={singleToggleHandle}
+          renameTodoHandle={renameTodoHandle}
+          isProcessing={isProcessing}
+        />
+      ))}
+      {tempTodo && (
+        <TodoItem
+          key={tempTodo.id}
+          todo={tempTodo}
+          deleteTodoHandle={deleteTodoHandle}
+          singleToggleHandle={singleToggleHandle}
+          renameTodoHandle={renameTodoHandle}
+          isProcessing={isProcessing}
+        />
+      )}
     </section>
   );
 };
