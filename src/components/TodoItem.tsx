@@ -55,7 +55,7 @@ export const TodoItem: React.FC<Props> = ({
     setShowEditingForm(false);
   };
 
-  const handleKeyUp = (e: React.KeyboardEvent) => {
+  const keyUpHandle = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
       reset();
     }
@@ -91,28 +91,27 @@ export const TodoItem: React.FC<Props> = ({
             onChange={e => setUpdatedTitle(e.target.value)}
             className="todo__title-field"
             onBlur={handleSubmit}
-            onKeyUp={handleKeyUp}
+            onKeyUp={keyUpHandle}
             autoFocus
           />
         ) : (
-          <span
-            data-cy="TodoTitle"
-            className="todo__title"
-            onDoubleClick={() => setShowEditingForm(true)}
-          >
-            {updatedTitle}
-          </span>
-        )}
-
-        {!showEditingForm && (
-          <button
-            type="button"
-            className="todo__remove"
-            data-cy="TodoDelete"
-            onClick={() => deleteTodoHandle(id)}
-          >
-            ×
-          </button>
+          <>
+            <span
+              data-cy="TodoTitle"
+              className="todo__title"
+              onDoubleClick={() => setShowEditingForm(true)}
+            >
+              {updatedTitle}
+            </span>
+            <button
+              type="button"
+              className="todo__remove"
+              data-cy="TodoDelete"
+              onClick={() => deleteTodoHandle(id)}
+            >
+              ×
+            </button>
+          </>
         )}
 
         <div

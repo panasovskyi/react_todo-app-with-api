@@ -2,6 +2,7 @@ import React from 'react';
 import { Todo } from '../types/Todo';
 import { TodoItem } from './TodoItem';
 import { Processing } from '../types/Processing';
+import { CSSTransition, TransitionGroup } from 'react-transition-group';
 
 type Props = {
   todos: Todo[];
@@ -24,26 +25,31 @@ export const TodoList: React.FC<Props> = ({
 }) => {
   return (
     <section className="todoapp__main" data-cy="TodoList">
-      {todos.map(todo => (
-        <TodoItem
-          key={todo.id}
-          todo={todo}
-          deleteTodoHandle={deleteTodoHandle}
-          singleToggleHandle={singleToggleHandle}
-          renameTodoHandle={renameTodoHandle}
-          isProcessing={isProcessing}
-        />
-      ))}
-      {tempTodo && (
-        <TodoItem
-          key={tempTodo.id}
-          todo={tempTodo}
-          deleteTodoHandle={deleteTodoHandle}
-          singleToggleHandle={singleToggleHandle}
-          renameTodoHandle={renameTodoHandle}
-          isProcessing={isProcessing}
-        />
-      )}
+      <TransitionGroup>
+        {todos.map(todo => (
+          <CSSTransition key={todo.id} classNames="item" timeout={300}>
+            <TodoItem
+              todo={todo}
+              deleteTodoHandle={deleteTodoHandle}
+              singleToggleHandle={singleToggleHandle}
+              renameTodoHandle={renameTodoHandle}
+              isProcessing={isProcessing}
+            />
+          </CSSTransition>
+        ))}
+        {tempTodo && (
+          <CSSTransition key={0} classNames="temp-item" timeout={300}>
+            <TodoItem
+              key={tempTodo.id}
+              todo={tempTodo}
+              deleteTodoHandle={deleteTodoHandle}
+              singleToggleHandle={singleToggleHandle}
+              renameTodoHandle={renameTodoHandle}
+              isProcessing={isProcessing}
+            />
+          </CSSTransition>
+        )}
+      </TransitionGroup>
     </section>
   );
 };
