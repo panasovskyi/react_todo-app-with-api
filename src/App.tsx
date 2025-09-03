@@ -121,7 +121,16 @@ export const App: React.FC = () => {
   const deleteAllCompleted = () => {
     const completedTodos = todos.filter(todo => todo.completed);
 
-    completedTodos.map(todo => deleteTodoHandle(todo.id));
+    setIsProcessing(prev => ({
+      ...prev,
+      submitting: [...prev.submitting, ...completedTodos.map(t => t.id)],
+    }));
+
+    Promise.all(completedTodos.map(todo => deleteTodoHandle(todo.id)))
+      .then(() => {})
+      .catch(() => {
+        setErrorMessage(ErrorTypes.deleteError);
+      });
   };
 
   const renameTodoHandle = (updatingTodo: Todo) => {
